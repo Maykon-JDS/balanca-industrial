@@ -44,16 +44,42 @@ class Balanca {
 
     int delayTime       = 1000;
 
-    int pesoReal        = 0;
+    bool estadoMenu = true;
+
+    bool estadoSubMenu = false;
+
+    bool configuracaoGeral = false;
+
+
+
+
+
+    float offset = 0;
 
     float pesoSemOffset = 0;
 
+    int pesoReal        = 0;
+
     float fatorEscala   = 0;
 
-    bool estadoMenu = true;
+
+    //Manter uma das duas variaveis
+
+    float offsetCaixa     = 0;
+
+    int pesoCaixa     = 0;
+
+    int pesoItem      = 0;
+
+    int qtdItem       = 0;
+
+    bool configuracaoOffsetCaixa = false;
+
+
 
     int menu = 0;
 
+    int submenu = 0;
 
     byte checkChar[8] = {
 
@@ -104,37 +130,143 @@ class Balanca {
 
   public:
 
+
+    pesar() {
+
+      HX711 scale;
+
+      scale.begin(pinDT, pinSCK);
+
+      float peso = 0;
+
+      bool loopPesar = true;
+
+      while (loopPesar) {
+
+        for (int i = 0; i < 10; i++) {
+
+          if (this->teclado->getKey() == 'B') {
+
+            loopPesar = false;
+
+            break;
+
+          }
+
+          delay(15);
+
+        }
+
+        peso = (scale.read_median(7) - this->offset) / this->fatorEscala;
+
+        this->lcd->clear();
+
+        this->lcd->setCursor(0, 0);
+
+        if (peso >= 0) {
+
+          this->lcd->print(peso);
+
+        }
+        else {
+
+          this->lcd->print(0);
+
+        }
+
+        this->lcd->print(" g");
+
+        this->lcd->setCursor(0, 1);
+
+        this->lcd->print("               ");
+
+      }
+
+    }
+
+    configurarFator() {
+
+      HX711 scale;
+
+      scale.begin(pinDT, pinSCK);
+
+      float pesoRaw = scale.read_average(100);
+
+      this->pesoSemOffset = pesoRaw - this->offset;
+
+      this->fatorEscala = this->pesoSemOffset / this->pesoReal;
+
+      Serial.print("fatorEscala: "); Serial.println(this->fatorEscala);
+
+    }
+
     iniciar() {
 
       this->lcd->backlight();
 
       this->lcd->setCursor(0, 0);
 
+      this->mostrarMenu();
+
     }
 
-
-    setTara() {
+    zerarBalanca() {
 
       this->lcd->clear();
 
-      this->scale->set_scale(); // LIMPANDO O VALOR DA ESCALA
+      char caracter = 'A';
+
+      this->lcd->print("Retire o Peso ");
+
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("OK - A        ");
+
+      this->confirmarViaTeclado(caracter);
 
       this->lcd->setCursor(0, 0);
 
-      this->lcd->print("Config. Tara...");
+      this->lcd->print("Peso Retirado?");
 
-      this->scale->tare(100); // ZERANDO A BALANÇA PARA DESCONSIDERAR A MASSA DA ESTRUTURA
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("Sim - A       ");
+
+      this->confirmarViaTeclado(caracter);
 
       this->lcd->setCursor(0, 0);
 
-      this->lcd->print("Tara Config. "); this->lcd->write(0); this->lcd->print("  ");
+      this->lcd->print("Zerar Balanca  ");
+
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("OK - A         ");
+
+      this->confirmarViaTeclado(caracter);
+
+      this->lcd->setCursor(0, 0);
+
+      this->lcd->print("Zerando...     ");
+
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("               ");
+
+      this->offset = this->scale->read_average(100); 
+
+      Serial.print("offset: "); Serial.println(this->offset);
+
+      this->lcd->setCursor(0, 0);
+
+      this->lcd->print("Zerada "); this->lcd->write(0); this->lcd->print("  ");
 
       this->delayClearLCD(this->delayTime);
 
     }
 
+    configurarBalanca() {
 
-    setFatorEscala() {
+      this->zerarBalanca();
 
       this->lcd->clear();
 
@@ -155,6 +287,8 @@ class Balanca {
       this->confirmarViaTeclado(caracter);
 
       this->setPesoRealFatorEscala();
+
+      this->configuracaoGeral = true;
 
       this->delayClearLCD(this->delayTime);
 
@@ -179,8 +313,6 @@ class Balanca {
       LiquidCrystal_I2C lcd(0x27, 16, 2);
 
       lcd.init();
-
-      lcd.backlight();
 
       lcd.clear();
 
@@ -212,11 +344,7 @@ class Balanca {
 
           pesoRealStr += tecla;
 
-          pesoReal = pesoRealStr.toInt();
-
-          Serial.println(pesoReal);
-
-          Serial.println(pesoReal);
+          this->pesoReal = pesoRealStr.toInt();
 
           lcd.setCursor(posicaoCursor, 1);
 
@@ -241,27 +369,9 @@ class Balanca {
 
       }
 
-      this->pesoReal = pesoRealStr.toInt();
+      this->configurarFator();
 
       this->delayClearLCD(this->delayTime);
-
-    }
-
-
-    printRawLCD(int row = 0, int col = 0) {
-
-      this->lcd->setCursor(col, row);
-
-      this->lcd->print(this->scale->read_average(3));
-
-    }
-
-
-    printUnitsLCD(int row = 0, int col = 0) {
-
-      this->lcd->setCursor(col, row);
-
-      this->lcd->print(this->scale->get_units(3));
 
     }
 
@@ -289,21 +399,27 @@ class Balanca {
 
         char acaoEscolhida = this->teclado->waitForKey();
 
-        Serial.println(acaoEscolhida);
+        if (acaoEscolhida == 'B') {
+
+          this->menu = 0;
+
+          break;
+
+        }
 
         loop1 = executarAcaoEscolhidaMenu(acaoEscolhida);
 
       }
     }
 
-  
+
     bool executarAcaoEscolhidaMenu(char acaoEscolhida) {
 
-      char voltar = '*';
+      char voltar = '*'; //Tornar essa variável uma variável de classe
 
-      char avancar = 'D';
+      char avancar = 'D'; //Tornar essa variável uma variável de classe
 
-      char confirmar = 'A';
+      char confirmar = 'A'; //Tornar essa variável uma variável de classe
 
 
       if (acaoEscolhida == confirmar) {
@@ -314,17 +430,30 @@ class Balanca {
         {
           case 0:
 
-            this->lcd->setCursor(0, 0);
+            if (!this->configuracaoGeral) {
 
-            this->lcd->print("  Pesar         ");
+              this->lcd->print("Config. Balanca");
 
-            this->lcd->setCursor(0, 1);
+              this->lcd->setCursor(0, 1);
 
-            this->lcd->print("Confirmado     D");
+              this->lcd->print("OK - A         ");
+
+              char caracter = 'A';
+
+              this->confirmarViaTeclado(caracter);
+
+              this->configurarBalanca();
+            }
+
+            this->pesar();
+
+
 
             break;
 
           case 1:
+
+            this->estadoSubMenu = true;
 
             this->mostrarSubmenu();
 
@@ -332,13 +461,7 @@ class Balanca {
 
           case 2:
 
-            this->lcd->setCursor(0, 0);
-
-            this->lcd->print("  Configurar    ");
-
-            this->lcd->setCursor(0, 1);
-
-            this->lcd->print("Confirmado     D");
+            this->configurarBalanca();
 
             break;
         }
@@ -346,12 +469,12 @@ class Balanca {
         return false;
 
       }
-      else if (acaoEscolhida == voltar && this->menu >= 0) {
+      else if (acaoEscolhida == voltar && this->menu > 0) {
 
         this->menu--;
 
       }
-      else if (acaoEscolhida == avancar && this->menu <= 2) {
+      else if (acaoEscolhida == avancar && this->menu < 2) {
 
         this->menu++;
 
@@ -405,23 +528,25 @@ class Balanca {
 
     }
 
-
-
     void mostrarSubmenu() {
 
       LiquidCrystal_I2C lcd(0x27, 16, 2);
 
       lcd.init();
 
-      this->menu = 0;
+      bool loop2 = estadoSubMenu;
 
-      bool loop2 = estadoMenu;
+      while (estadoMenu && loop2) {
 
-      while (loop2) {
-
-        this->mostrarOpcoesSubMenu1();
+        this->mostrarOpcoesSubMenu();
 
         char acaoEscolhida = this->teclado->waitForKey();
+
+        if (acaoEscolhida == 'B') {
+
+          break;
+
+        }
 
         Serial.println(acaoEscolhida);
 
@@ -430,147 +555,467 @@ class Balanca {
       }
 
     }
-    
 
-    void mostrarOpcoesSubMenu1() {
 
-      switch (this->menu)
+    void mostrarOpcoesSubMenu() {
+
+      switch (this->submenu)
       {
-        
+
         case 0:
-          
+
           this->lcd->setCursor(0, 0);
-          
+
           this->lcd->print("  Contar       >");
-          
+
           this->lcd->setCursor(0, 1);
-          
+
           this->lcd->print("               D");
-          
+
           break;
-        
+
         case 1:
-          
+
           this->lcd->setCursor(0, 0);
-          
+
           this->lcd->print("< Ver Config.  >");
-          
+
           this->lcd->setCursor(0, 1);
 
           this->lcd->print("*              D");
-          
+
           break;
-        
+
         case 2:
-          
+
           this->lcd->setCursor(0, 0);
-          
-          this->lcd->print("< Config. Item >");
-          
+
+          this->lcd->print("< Config. QTD  >");
+
           this->lcd->setCursor(0, 1);
-          
+
           this->lcd->print("*              D");
-          
+
           break;
-        
+
         case 3:
-          
+
           this->lcd->setCursor(0, 0);
-          
-          this->lcd->print("< Config. Caixa >");
-          
+
+          this->lcd->print("< Config. Item >");
+
           this->lcd->setCursor(0, 1);
-          
-          this->lcd->print("*               ");
-          
+
+          this->lcd->print("*              D");
+
           break;
+
+        case 4:
+
+          this->lcd->setCursor(0, 0);
+
+          this->lcd->print("< Config. Caixa >");
+
+          this->lcd->setCursor(0, 1);
+
+          this->lcd->print("*               ");
+
+          break;
+      }
+
+    }
+
+    bool executarAcaoEscolhidaSubmenu(char acaoEscolhida) {
+
+      char voltar = '*';
+
+      char avancar = 'D';
+
+      char confirmar = 'A';
+
+      if (acaoEscolhida == confirmar) {
+
+        this->lcd->clear();
+
+        switch (this->submenu)
+        {
+
+          case 0:
+
+            this->contarItens();
+
+            break;
+
+          case 1:
+
+            this->mostrarConfiguracaoContagem();
+
+            break;
+
+          case 2:
+            this->configurarQtdItem();
+
+            break;
+
+          case 3:
+
+            this->configurarItem();
+
+
+            break;
+
+          case 4:
+
+            this->configurarCaixa();
+
+            break;
+
+        }
+
+        return false;
+
+      }
+      else if (acaoEscolhida == voltar && this->submenu > 0) {
+
+        this->submenu--;
+
+      }
+      else if (acaoEscolhida == avancar && this->submenu < 4) {
+
+        this->submenu++;
+
+      }
+
+      return true;
+
+    }
+
+    contarItens(){
+      
+      HX711 scale;
+
+      scale.begin(pinDT, pinSCK);
+
+      float peso = 0;
+
+      float itens = 0;
+
+      bool loopContar = true;
+
+      while (loopContar) {
+
+        for (int i = 0; i < 10; i++) {
+
+          if (this->teclado->getKey() == 'B') {
+
+            loopContar = false;
+
+            break;
+
+          }
+
+          delay(15);
+
+        }
+
+        peso = (scale.read_median(7) - this->offset) / this->fatorEscala;
+
+        itens = (peso - this->pesoCaixa) / this->pesoItem;
+
+        this->lcd->clear();
+
+        this->lcd->setCursor(0, 0);
+
+        this->lcd->print("QTD: ");
+
+        this->lcd->print(this->qtdItem);
+
+        this->lcd->setCursor(0, 1);
+
+        if (itens > 0) {
+
+          Serial.println(floor(itens));
+          
+          this->lcd->print(itens);
+
+        }
+        else {
+
+          this->lcd->print(0);
+
+        }
+
+        this->lcd->print(" UN");
+
+        
+        if(floor(itens) == this->qtdItem){
+          
+            this->lcd->setCursor(8, 1);
+            
+            this->lcd->print(" CERTA!");
+            
+        }
+        else if(floor(itens) > this->qtdItem){
+          
+            this->lcd->setCursor(8, 1);
+            
+            this->lcd->print("PASSOU!");
+            
+        }
+
+        
+
       }
       
     }
 
-    bool executarAcaoEscolhidaSubmenu(char acaoEscolhida){
+    mostrarConfiguracaoContagem(){
+
+      char caracter = 'A';
       
-        char voltar = '*';
-        
-        char avancar = 'D';
-        
-        char confirmar = 'A';
+      this->lcd->clear();
 
-        if (acaoEscolhida == confirmar) {
-          
-          this->lcd->clear();
+      this->lcd->print("QTD: ");
 
-          switch (this->menu)
-          {
-            
-            case 0:
-              
-              this->lcd->setCursor(0, 0);
-              
-              this->lcd->print("  Contar        ");
-              
-              this->lcd->setCursor(0, 1);
-              
-              this->lcd->print("Confirmado     D");
-              
-              break;
-            
-            case 1:
-              
-              this->lcd->setCursor(0, 0);
-              
-              this->lcd->print("  Ver Config.  ");
-              
-              this->lcd->setCursor(0, 1);
-              
-              this->lcd->print("Confirmado     D");
-              
-              break;
-            
-            case 2:
-              
-              this->lcd->setCursor(0, 0);
-              
-              this->lcd->print("  Config. Item  ");
-              
-              this->lcd->setCursor(0, 1);
-              
-              this->lcd->print("Confirmado     D");
-              
-              break;
-            
-            case 3:
-              
-              this->lcd->setCursor(0, 0);
-              
-              this->lcd->print("  Config. Caixa ");
-              
-              this->lcd->setCursor(0, 1);
-              
-              this->lcd->print("Confirmado     D");
-              
-              break;
-              
-          }
+      this->lcd->print(this->qtdItem);
 
-          return false;
+      this->lcd->print(" UN");
 
-        }
-        else if (acaoEscolhida == voltar && this->menu >= 0) {
+      this->lcd->setCursor(0, 1);
 
-          this->menu--;
+      this->lcd->print("OK - A");
 
-        }
-        else if (acaoEscolhida == avancar && this->menu <= 3) {
+      this->confirmarViaTeclado(caracter);
 
-          this->menu++;
+      this->lcd->setCursor(0, 0);
 
-        }
+      this->lcd->print("                ");
 
-        return true;
+      this->lcd->setCursor(0, 0);
+
+      this->lcd->print("Item: ");
+
+      this->lcd->print(this->pesoItem);
+
+      this->lcd->print(" g");
+
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("OK - A");
+
+      this->confirmarViaTeclado(caracter);
+
+      this->lcd->setCursor(0, 0);
+
+      this->lcd->print("                ");
+
+      this->lcd->setCursor(0, 0);
+
+      this->lcd->print("Caixa: ");
+
+      this->lcd->print(this->pesoCaixa);
+
+      this->lcd->print(" g");
+
+      this->lcd->setCursor(0, 1);
+
+      this->lcd->print("OK - A");
+
+      this->confirmarViaTeclado(caracter);
     
     }
-   
+
+    configurarQtdItem(){
+      
+      LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+      lcd.init();
+
+      lcd.clear();
+
+      lcd.setCursor(0, 0);
+
+      lcd.print("Max. 25000 UN");
+
+      lcd.setCursor(0, 1);
+
+      lcd.print("QTD: ");
+
+      int posicaoCursor = 5;
+
+      char tecla = "";
+
+      String qtdItemStr = "";
+
+      lcd.setCursor(0, 0);
+
+      while (tecla != 'A' ||  this->qtdItem > 25000) {
+
+        tecla = this->teclado->waitForKey();
+
+        if (isDigit(tecla) && posicaoCursor < 13) {
+
+          qtdItemStr += tecla;
+
+          this->qtdItem = qtdItemStr.toInt();
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(tecla);
+
+          lcd.printstr(" UN");
+
+          posicaoCursor++;
+
+        }
+        else if (tecla == 'D' && posicaoCursor > 5) {
+
+          qtdItemStr.remove(qtdItemStr.length() - 1, 1);
+
+          posicaoCursor--;
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(" UN ");
+
+        }
+
+      }
+
+      Serial.println(this->qtdItem);
+
+      this->delayClearLCD(this->delayTime);
+    }
+
+    configurarItem() {
+
+      LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+      lcd.init();
+
+      lcd.clear();
+
+      lcd.setCursor(0, 0);
+
+      lcd.print("Max. 500 g");
+
+      lcd.setCursor(0, 1);
+
+      lcd.print("Peso: ");
+
+      int posicaoCursor = 6;
+
+      char tecla = "";
+
+      String pesoItemStr = "";
+
+      lcd.setCursor(0, 0);
+
+      while (tecla != 'A' ||  this->pesoItem > 500) {
+
+        tecla = this->teclado->waitForKey();
+
+        if (isDigit(tecla) && posicaoCursor < 14) {
+
+          pesoItemStr += tecla;
+
+          this->pesoItem = pesoItemStr.toInt();
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(tecla);
+
+          lcd.printstr(" g");
+
+          posicaoCursor++;
+
+        }
+        else if (tecla == 'D' && posicaoCursor > 6) {
+
+          pesoItemStr.remove(pesoItemStr.length() - 1, 1);
+
+          posicaoCursor--;
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(" g ");
+
+        }
+
+      }
+
+      Serial.println(this->pesoItem);
+
+      this->delayClearLCD(this->delayTime);
+
+    }
+
+
+
+    configurarCaixa() {
+
+      LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+      lcd.init();
+
+      lcd.clear();
+
+      lcd.setCursor(0, 0);
+
+      lcd.print("Max. 500 g");
+
+      lcd.setCursor(0, 1);
+
+      lcd.print("Peso: ");
+
+      int posicaoCursor = 6;
+
+      char tecla = "";
+
+      String pesoCaixaStr = "";
+
+      lcd.setCursor(0, 0);
+
+      while (tecla != 'A' ||  this->pesoCaixa > 500) {
+
+        tecla = this->teclado->waitForKey();
+
+        if (isDigit(tecla) && posicaoCursor < 14) {
+
+          pesoCaixaStr += tecla;
+
+          this->pesoCaixa = pesoCaixaStr.toInt();
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(tecla);
+
+          lcd.printstr(" g");
+
+          posicaoCursor++;
+
+        }
+        else if (tecla == 'D' && posicaoCursor > 6) {
+
+          pesoCaixaStr.remove(pesoCaixaStr.length() - 1, 1);
+
+          posicaoCursor--;
+
+          lcd.setCursor(posicaoCursor, 1);
+
+          lcd.print(" g ");
+
+        }
+        
+      }
+
+      Serial.println(this->pesoCaixa);
+
+      this->delayClearLCD(this->delayTime);
+
+    }
+
+
 };
 
 Balanca * balanca = NULL;
@@ -582,156 +1027,10 @@ void setup() {
 
   balanca = new Balanca(lcd, teclado, scale);
 
-  //  char texto[] = "Coloque o peso e envie o valor deste, em gramas!              ";
-  //  char texto[] = "Coloque o peso e envie o valor deste, em gramas, pelo serial! ";
-
-  //  delay(1000);
-  //
-  //  Serial.begin(115200);
-  //
-  //  scale.begin(pinDT, pinSCK); // CONFIGURANDO OS PINOS DA BALANÇA
-  //  //  scale.set_scale(50.24108); // LIMPANDO O VALOR DA ESCALA
-  //  scale.set_scale(); // LIMPANDO O VALOR DA ESCALA
-  //  delay(2000);
-  //  lcd.setCursor(0, 0);
-  //  // Serial.println("Zerando a Balança");
-  //  lcd.print("Zerando...");
-  //  lcd.setCursor(0, 0);
-  //  scale.tare(100); // ZERANDO A BALANÇA PARA DESCONSIDERAR A MASSA DA ESTRUTURA
-  //  lcd.setCursor(0, 0);
-  //  lcd.print("Zerado "); lcd.write(0); lcd.print("   ");
-  //  // Serial.println("Balança Zerada"
-  //  delay(1000);
-  //  lcd.clear();
-
-  //Serial.println("Coloque o peso e envie o valor deste, em gramas");
-
-  //  bool loopW = true;
-  //  lcd.clear();
-  //  int j = 0;
-  //
-  //
-  //
-  //  while (loopW) {
-  //    int x = 0;
-  //    lcd.setCursor(0, 0);
-  //
-  //
-  //    for (int i = 0; i < 16; i++) {
-  //
-  //      if (j < 2) {
-  //        lcd.print(texto[i]);
-  //      }
-  //      else if (j > 1 && j <= 45) {
-  //
-  //        lcd.print(texto[i + j]);
-  //
-  //      }
-  //      else if (j > 45) {
-  //
-  //        if ( i > 15 - (j - 46) ) {
-  //
-  //          lcd.print(texto[x]);
-  //          x++;
-  //        }
-  //        else {
-  //          lcd.print(texto[i + j]);
-  //        }
-  //      }
-  //
-  //      if (j == 61) {
-  //        j = 0;
-  //      }
-  //    }
-  //
-  //    j++;
-  //
-  //    char tecla = teclado.getKey();
-  //    if (tecla == 'A') {
-  //      loopW = false;
-  //    }
-  //    delay(100);
-  //    lcd.clear();
-  //  }
-  //  lcd.setCursor(0, 0);
-  //  lcd.print("Max. 25000 g");
-  //
-  //  lcd.setCursor(0, 1);
-  //  lcd.print("Peso: ");
-  //
-  //  int posicao = 6;
-  //  String texto2 = "";
-  //
-  //  char tecla = ' ';
-  //
-  //  while (tecla != 'A') {
-  //    tecla = teclado.getKey();
-  //
-  //    if (isDigit(tecla)) {
-  //
-  //
-  //      lcd.setCursor(posicao, 1);
-  //      texto2.concat(tecla);
-  //      lcd.print(tecla);
-  //      Serial.println(texto2);
-  //      posicao++;
-  //    }
-  //    else if (tecla == 'D' && posicao > 6) {
-  //      texto2.remove(texto2.length() - 1, 1);
-  //      posicao--;
-  //      lcd.setCursor(posicao, 1);
-  //      lcd.print(" ");
-  //      Serial.println(texto2);
-  //    }
-  //
-  //  }
-
-
-  //  lcd.setCursor(0, 0);
-  //  pesoReal = texto2.toInt();
-  //
-  //
-  //  if (pesoReal > 0) {
-
-  //    lcd.print(pesoReal);
-  //    pesoSemOffset = scale.get_units(100);
-  //    fator = pesoSemOffset / pesoReal;
-  //    scale.set_scale(fator);
-  //
-  //
-  //  }
-  //  else {
-  //    Serial.flush();
-  //  }
-  //
-  //  lcd.clear();
-
-  balanca->iniciar();
-  balanca->mostrarMenu();
-
 }
 
 void loop() {
 
-  //  Serial.println(teclado.waitForKey());
+  balanca->iniciar();
 
-  //  balanca->printRawLCD(0,0);
-  //  balanca->printUnitsLCD(0,1);
-
-  //  lcd.print(scale.get_units(3));
-  //  delay(250);
-  //  lcd.clear();
-  //medida = scale.get_units(3); // SALVANDO NA VARIAVEL O VALOR DA MÉDIA DE 5 MEDIDAS
-  // Serial.println(medida); // ENVIANDO PARA MONITOR SERIAL A MEDIDA COM 3 CASAS DECIMAIS
-  // Serial.println(floor(medida), 2);
-  // Serial.print("RAW:\t"); Serial.println(scale.get_offset());
-  // Serial.print("RAW:\t"); Serial.println(scale.read());
-  // Serial.print("UNITS:\t\t"); Serial.println(scale.get_units(3));
-  //  Serial.print(scale.get_units(3)); Serial.println(" g");
-  // Serial.print("PARSE INT:\t"); Serial.println(Serial.parseInt());
-  // Serial.print("READ STRING:\t"); Serial.println(Serial.readString());
-  // delay(2000);
-  //  scale.power_down(); // DESLIGANDO O SENSOR
-  //  delay(5); // AGUARDA 5 SEGUNDOS
-  //  scale.power_up(); // LIGANDO O SENSOR
 }
